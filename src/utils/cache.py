@@ -1,91 +1,74 @@
+"""
+In-memory cache with TTL for API responses.
+
+This module provides a simple cache system that stores API responses in memory
+with a time-to-live (TTL) value. This can help reduce the number of requests
+made to the API and improve performance.
+
+Usage:
+    from src.utils.cache import cache
+
+    @cache(ttl=60)  # cache for 1 minute
+    def fetch_data(url):
+        # make API request and return data
+        pass
+"""
+
 import time
-from typing import Any, Dict
+from functools import wraps
 
 class Cache:
-    def __init__(self, ttl: int = 60):
-        """
-        Initialize the cache with a time-to-live (TTL) in seconds.
+    def __init__(self):
+        self.cache = {}
 
-        Args:
-        ttl (int): The time-to-live for each cache entry in seconds. Defaults to 60.
-        """
-        self.cache: Dict[str, Any] = {}
-        self.ttl = ttl
-
-    def get(self, key: str) -> Any:
-        """
-        Get a value from the cache.
-
-        Args:
-        key (str): The key to retrieve from the cache.
-
-        Returns:
-        Any: The cached value if it exists and is not expired, otherwise None.
-        """
+    def get(self, key):
+        """Get a value from the cache."""
         if key in self.cache:
-            value, expires = self.cache[key]
-            if time.time() < expires:
+            value, expiry = self.cache[key]
+            if time.time() < expiry:
                 return value
             else:
                 del self.cache[key]
         return None
 
-    def set(self, key: str, value: Any) -> None:
-        """
-        Set a value in the cache.
+    def set(self, key, value, ttl):
+        """Set a value in the cache with a TTL."""
+        expiry = time.time() + ttl
+        self.cache[key] = (value, expiry)
 
-        Args:
-        key (str): The key to store in the cache.
-        value (Any): The value to store in the cache.
-        """
-        expires = time.time() + self.ttl
-        self.cache[key] = (value, expires)
-
-    def delete(self, key: str) -> None:
-        """
-        Delete a key from the cache.
-
-        Args:
-        key (str): The key to delete from the cache.
-        """
+    def delete(self, key):
+        """Delete a value from the cache."""
         if key in self.cache:
             del self.cache[key]
 
-# Create a cache instance with a TTL of 1 minute
-cache = Cache(ttl=60)
+cache_instance = Cache()
 
-def cache_api_response(key: str, func, *args, **kwargs):
-    """
-    Cache the response of a function call.
+def cache(ttl):
+    """Cache decorator with TTL."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
+            value = cache_instance.get(key)
+            if value is not None:
+                return value
+            else:
+                value = func(*args, **kwargs)
+                cache_instance.set(key, value, ttl)
+                return value
+        return wrapper
+    return decorator
 
-    Args:
-    key (str): The cache key.
-    func: The function to call.
-    *args: The positional arguments to pass to the function.
-    **kwargs: The keyword arguments to pass to the function.
+def clear_cache():
+    """Clear the entire cache."""
+    cache_instance.cache = {}
 
-    Returns:
-    Any: The cached or computed response.
-    """
-    cached_response = cache.get(key)
-    if cached_response is not None:
-        return cached_response
-    else:
-        response = func(*args, **kwargs)
-        cache.set(key, response)
-        return response
+def delete_cache(key):
+    """Delete a specific key from the cache."""
+    cache_instance.delete(key)
 
 # Example usage:
-def example_api_call():
-    # Simulate an API call
-    time.sleep(1)
-    return "API response"
-
-# Cache the API response for 1 minute
-key = "example_api_call"
-response = cache_api_response(key, example_api_call)
-print(response)
-
-# Subsequent calls will return the cached response
-response = cache_api_response(key, example_api_call)
-print(response)
+# @cache(ttl=60)  # cache for 1 minute
+# def fetch_data(url):
+#     # make API request and return data
+#     pass
