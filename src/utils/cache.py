@@ -1,28 +1,27 @@
-"""
-In-memory cache with TTL for API responses.
-
-This module provides a simple cache system that stores API responses in memory
-with a time-to-live (TTL) value. This can help reduce the number of requests
-made to the API and improve performance.
-
-Usage:
-    from src.utils.cache import cache
-
-    @cache(ttl=60)  # cache for 1 minute
-    def fetch_data(url):
-        # make API request and return data
-        pass
-"""
-
 import time
-from functools import wraps
+from typing import Any, Dict
 
 class Cache:
-    def __init__(self):
-        self.cache = {}
+    def __init__(self, ttl: int = 60):
+        """
+        Initialize the cache with a time-to-live (TTL) value.
 
-    def get(self, key):
-        """Get a value from the cache."""
+        Args:
+        ttl (int): The time-to-live value in seconds. Defaults to 60.
+        """
+        self.cache: Dict[str, Any] = {}
+        self.ttl = ttl
+
+    def get(self, key: str) -> Any:
+        """
+        Get a value from the cache.
+
+        Args:
+        key (str): The key to retrieve from the cache.
+
+        Returns:
+        Any: The cached value or None if not found or expired.
+        """
         if key in self.cache:
             value, expiry = self.cache[key]
             if time.time() < expiry:
@@ -31,44 +30,52 @@ class Cache:
                 del self.cache[key]
         return None
 
-    def set(self, key, value, ttl):
-        """Set a value in the cache with a TTL."""
-        expiry = time.time() + ttl
+    def set(self, key: str, value: Any) -> None:
+        """
+        Set a value in the cache.
+
+        Args:
+        key (str): The key to store in the cache.
+        value (Any): The value to store in the cache.
+        """
+        expiry = time.time() + self.ttl
         self.cache[key] = (value, expiry)
 
-    def delete(self, key):
-        """Delete a value from the cache."""
+    def delete(self, key: str) -> None:
+        """
+        Delete a key from the cache.
+
+        Args:
+        key (str): The key to delete from the cache.
+        """
         if key in self.cache:
             del self.cache[key]
 
-cache_instance = Cache()
+# Create a cache instance with a TTL of 30 seconds
+cache = Cache(ttl=30)
 
-def cache(ttl):
-    """Cache decorator with TTL."""
+def cache_response(ttl: int = 30):
+    """
+    Decorator to cache API responses.
+
+    Args:
+    ttl (int): The time-to-live value in seconds. Defaults to 30.
+    """
     def decorator(func):
-        @wraps(func)
         def wrapper(*args, **kwargs):
             key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
-            value = cache_instance.get(key)
-            if value is not None:
-                return value
-            else:
-                value = func(*args, **kwargs)
-                cache_instance.set(key, value, ttl)
-                return value
+            cached_response = cache.get(key)
+            if cached_response is not None:
+                return cached_response
+            response = func(*args, **kwargs)
+            cache.set(key, response)
+            return response
         return wrapper
     return decorator
 
-def clear_cache():
-    """Clear the entire cache."""
-    cache_instance.cache = {}
-
-def delete_cache(key):
-    """Delete a specific key from the cache."""
-    cache_instance.delete(key)
-
 # Example usage:
-# @cache(ttl=60)  # cache for 1 minute
-# def fetch_data(url):
-#     # make API request and return data
-#     pass
+# @cache_response(ttl=60)
+# def get_habits(user_id: int) -> List[Habit]:
+#     # API call to retrieve habits for the user
+#     habits = Habit.objects.filter(user_id=user_id)
+#     return habits
