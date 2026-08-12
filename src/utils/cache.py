@@ -1,81 +1,75 @@
-"""
-In-memory cache with TTL for API responses.
-
-This module provides a simple cache system that stores API responses in memory
-with a time-to-live (TTL) value. This can help reduce the number of requests
-made to the API and improve performance.
-
-Usage:
-    from src.utils.cache import cache
-
-    @cache(ttl=60)  # cache for 1 minute
-    def fetch_data(url):
-        # make API request and return data
-        pass
-"""
-
 import time
-from functools import wraps
+from typing import Any, Dict, Optional
 
 class Cache:
-    def __init__(self):
-        self.cache = {}
+    def __init__(self, ttl: int = 60):  # 1 minute default TTL
+        """
+        Initialize the cache with a given TTL (time to live) in seconds.
+        
+        :param ttl: Time to live in seconds
+        """
+        self.ttl = ttl
+        self.cache: Dict[str, Dict[str, Any]] = {}
 
-    def get(self, key):
-        """Get cached value by key."""
+    def get(self, key: str) -> Optional[Any]:
+        """
+        Get a value from the cache by key.
+        
+        :param key: Cache key
+        :return: Cached value or None if not found or expired
+        """
         if key in self.cache:
-            value, expiry = self.cache[key]
-            if time.time() < expiry:
-                return value
+            value = self.cache[key]
+            if time.time() < value['expires']:
+                return value['data']
             else:
                 del self.cache[key]
         return None
 
-    def set(self, key, value, ttl):
-        """Set cached value by key with TTL."""
-        expiry = time.time() + ttl
-        self.cache[key] = (value, expiry)
+    def set(self, key: str, value: Any) -> None:
+        """
+        Set a value in the cache by key.
+        
+        :param key: Cache key
+        :param value: Value to cache
+        """
+        expires = time.time() + self.ttl
+        self.cache[key] = {'data': value, 'expires': expires}
 
-    def delete(self, key):
-        """Delete cached value by key."""
+    def delete(self, key: str) -> None:
+        """
+        Delete a value from the cache by key.
+        
+        :param key: Cache key
+        """
         if key in self.cache:
             del self.cache[key]
 
-cache_instance = Cache()
+# Create a singleton cache instance
+cache = Cache(ttl=300)  # 5 minutes TTL
 
-def cache(ttl):
-    """Cache decorator with TTL."""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            key = f"{func.__name__}:{str(args)}:{str(kwargs)}"
-            cached_value = cache_instance.get(key)
-            if cached_value is not None:
-                return cached_value
-            else:
-                value = func(*args, **kwargs)
-                cache_instance.set(key, value, ttl)
-                return value
-        return wrapper
-    return decorator
+def get_cached_api_response(key: str) -> Optional[Any]:
+    """
+    Get a cached API response by key.
+    
+    :param key: Cache key
+    :return: Cached API response or None if not found or expired
+    """
+    return cache.get(key)
 
-# Example usage:
-# @cache(ttl=60)  # cache for 1 minute
-# def fetch_data(url):
-#     # make API request and return data
-#     pass
+def cache_api_response(key: str, value: Any) -> None:
+    """
+    Cache an API response by key.
+    
+    :param key: Cache key
+    :param value: API response to cache
+    """
+    cache.set(key, value)
 
-def clear_cache():
-    """Clear entire cache."""
-    cache_instance.cache.clear()
-
-def get_cache_stats():
-    """Get cache statistics."""
-    return {
-        "hits": sum(1 for key, (value, expiry) in cache_instance.cache.items() if time.time() < expiry),
-        "misses": len(cache_instance.cache) - sum(1 for key, (value, expiry) in cache_instance.cache.items() if time.time() < expiry),
-        "size": len(cache_instance.cache)
-    }
-
-# Example usage:
-# print(get_cache_stats())
+def delete_cached_api_response(key: str) -> None:
+    """
+    Delete a cached API response by key.
+    
+    :param key: Cache key
+    """
+    cache.delete(key)
