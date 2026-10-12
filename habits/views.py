@@ -9,11 +9,18 @@ class HabitCategoryList(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
 class HabitList(generics.ListCreateAPIView):
-    queryset = Habit.objects.all()
     serializer_class = HabitSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        return Habit.objects.filter(user=self.request.user).select_related('category')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
 class HabitLogList(generics.ListCreateAPIView):
-    queryset = HabitLog.objects.all()
     serializer_class = HabitLogSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return HabitLog.objects.filter(habit__user=self.request.user).select_related('habit', 'habit__category')
